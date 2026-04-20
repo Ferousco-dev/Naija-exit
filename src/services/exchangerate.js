@@ -1,4 +1,5 @@
 const FX_ALERTS_KEY = "fx_rate_alerts";
+const FX_ALERT_HISTORY_KEY = "fx_alert_history";
 const PREVIOUS_RATES_KEY = "fx_previous_rates";
 
 // Store previous rates for direction tracking
@@ -21,7 +22,8 @@ export const getPreviousRates = () => {
   }
 };
 
-// Store FX rate alerts
+// Store FX rate alerts (now supports multiple per currency with direction)
+// Format: { "USD": [{id, target, direction: "above"|"below"}, ...], ... }
 export const storeFXAlerts = (alerts) => {
   try {
     localStorage.setItem(FX_ALERTS_KEY, JSON.stringify(alerts));
@@ -41,6 +43,40 @@ export const getFXAlerts = () => {
   }
 };
 
+// Store alert history (for Supabase sync or display)
+export const storeAlertHistory = (alerts) => {
+  try {
+    localStorage.setItem(FX_ALERT_HISTORY_KEY, JSON.stringify(alerts));
+  } catch (err) {
+    console.warn("Failed to store alert history:", err);
+  }
+};
+
+// Get alert history
+export const getAlertHistory = () => {
+  try {
+    const history = localStorage.getItem(FX_ALERT_HISTORY_KEY);
+    return history ? JSON.parse(history) : [];
+  } catch (err) {
+    console.warn("Failed to retrieve alert history:", err);
+    return [];
+  }
+};
+
+// Add triggered alert to history with timestamp
+export const logAlertTriggered = (alert) => {
+  const history = getAlertHistory();
+  history.push({
+    ...alert,
+    triggeredAt: new Date().toISOString(),
+  });
+  // Keep only last 100 alerts
+  if (history.length > 100) {
+    history.shift();
+  }
+  storeAlertHistory(history);
+};
+
 // Check if any rate alerts should trigger
 export const checkFXAlerts = (currentRates) => {
   try {
@@ -48,21 +84,38 @@ export const checkFXAlerts = (currentRates) => {
     const triggeredAlerts = [];
 
     Object.keys(alerts).forEach((currency) => {
-      const targetRate = alerts[currency];
+      const currencyAlerts = alerts[currency] || [];
       const currentRate = parseFloat(currentRates[currency]);
 
-      if (!isNaN(currentRate) && targetRate) {
-        // Alert if rate reached or exceeded target
-        if (currentRate >= targetRate) {
-          triggeredAlerts.push({
-            currency,
-            targetRate,
-            currentRate,
-            message: `FX Alert: ${currency} has reached ₦${currentRate.toFixed(
-              2
-            )} (target: ₦${targetRate.toFixed(2)})`,
-          });
-        }
+      if (!isNaN(currentRate)) {
+        currencyAlerts.forEach((alert) => {
+          const targetRate = alert.target || alert; // backward compat
+          const direction = alert.direction || "above";
+          let isTriggered = false;
+
+          if (direction === "above") {
+            isTriggered = currentRate >= targetRate;
+          } else if (direction === "below") {
+            isTriggered = currentRate <= targetRate;
+          }
+
+          if (isTriggered) {
+            const triggeredAlert = {
+              id: alert.id,
+              currency,
+              targetRate,
+              currentRate,
+              direction,
+              message: `FX Alert: ${currency} ${
+                direction === "above" ? "reached" : "dropped to"
+              } ₦${currentRate.toFixed(2)} (${direction}: ₦${targetRate.toFixed(
+                2
+              )})`,
+            };
+            triggeredAlerts.push(triggeredAlert);
+            logAlertTriggered(triggeredAlert);
+          }
+        });
       }
     });
 

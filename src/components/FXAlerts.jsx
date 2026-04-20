@@ -3,22 +3,33 @@ import {
   getFXAlerts,
   storeFXAlerts,
   checkFXAlerts,
+  getAlertHistory,
 } from "../services/exchangerate.js";
 
 const FX_PAIRS = ["USD", "GBP", "CAD", "EUR", "AUD"];
 
+// Generate unique ID for alerts
+const generateAlertId = () => `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
 export default function FXAlerts({ fxRates, onAlertTriggered }) {
   const [alerts, setAlerts] = useState({});
   const [isOpen, setIsOpen] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
   const [selectedCurrency, setSelectedCurrency] = useState("USD");
   const [targetRate, setTargetRate] = useState("");
+  const [direction, setDirection] = useState("above");
   const [triggeredAlerts, setTriggeredAlerts] = useState([]);
+  const [alertHistory, setAlertHistory] = useState([]);
 
+  // Initialize from storage
   useEffect(() => {
     const savedAlerts = getFXAlerts();
-    setAlerts(savedAlerts);
+    setAlerts(savedAlerts || {});
+    const history = getAlertHistory();
+    setAlertHistory(history || []);
   }, []);
 
+  // Check for triggered alerts
   useEffect(() => {
     if (fxRates) {
       const triggered = checkFXAlerts(fxRates);
@@ -36,19 +47,45 @@ export default function FXAlerts({ fxRates, onAlertTriggered }) {
     e.preventDefault();
     if (!targetRate || isNaN(parseFloat(targetRate))) return;
 
-    const newAlerts = {
-      ...alerts,
-      [selectedCurrency]: parseFloat(targetRate),
+    const newAlert = {
+      id: generateAlertId(),
+      target: parseFloat(targetRate),
+      direction,
     };
+
+    const newAlerts = { ...alerts };
+    if (!newAlerts[selectedCurrency]) {
+      newAlerts[selectedCurrency] = [];
+    } else if (!Array.isArray(newAlerts[selectedCurrency])) {
+      // Backward compat: convert old format to new
+      newAlerts[selectedCurrency] = [
+        {
+          id: generateAlertId(),
+          target: newAlerts[selectedCurrency],
+          direction: "above",
+        },
+      ];
+    }
+
+    newAlerts[selectedCurrency].push(newAlert);
     setAlerts(newAlerts);
     storeFXAlerts(newAlerts);
     setTargetRate("");
-    setSelectedCurrency("USD");
+    setDirection("above");
   };
 
-  const handleRemoveAlert = (currency) => {
+  const handleRemoveAlert = (currency, alertId) => {
     const newAlerts = { ...alerts };
-    delete newAlerts[currency];
+    if (Array.isArray(newAlerts[currency])) {
+      newAlerts[currency] = newAlerts[currency].filter(
+        (a) => a.id !== alertId
+      );
+      if (newAlerts[currency].length === 0) {
+        delete newAlerts[currency];
+      }
+    } else {
+      delete newAlerts[currency];
+    }
     setAlerts(newAlerts);
     storeFXAlerts(newAlerts);
   };
@@ -57,48 +94,88 @@ export default function FXAlerts({ fxRates, onAlertTriggered }) {
     setTriggeredAlerts(triggeredAlerts.filter((_, i) => i !== index));
   };
 
+  const totalAlertCount = Object.values(alerts).reduce(
+    (sum, alerts) => sum + (Array.isArray(alerts) ? alerts.length : 1),
+    0
+  );
+
   return (
     <div>
-      {/* Alert Notifications */}
+      {/* Mobile-Friendly Toast Notifications */}
       {triggeredAlerts.length > 0 && (
         <div
           style={{
             position: "fixed",
-            top: "20px",
-            right: "20px",
+            top: 0,
+            left: 0,
+            right: 0,
             zIndex: 1000,
-            maxWidth: "350px",
+            padding: "12px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "8px",
+            maxHeight: "50vh",
+            overflowY: "auto",
+            // Mobile: center, Desktop: top-right
+            alignItems: window.innerWidth < 768 ? "center" : "flex-end",
           }}
         >
           {triggeredAlerts.map((alert, idx) => (
             <div
               key={idx}
               style={{
-                background: "#10B981",
+                background: "linear-gradient(135deg, #10B981, #059669)",
                 color: "white",
-                padding: "12px 16px",
-                borderRadius: "8px",
-                marginBottom: "10px",
+                padding: "16px 20px",
+                borderRadius: "12px",
+                maxWidth: window.innerWidth < 768 ? "90%" : "360px",
                 display: "flex",
                 justifyContent: "space-between",
-                alignItems: "center",
-                boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
-                animation: "slideIn 0.3s ease",
+                alignItems: "flex-start",
+                gap: "12px",
+                boxShadow: "0 8px 24px rgba(16, 185, 129, 0.3)",
+                animation: "slideInAlert 0.4s ease",
+                backdropFilter: "blur(10px)",
               }}
             >
-              <div style={{ fontSize: "13px" }}>
-                <strong>🔔 FX Alert</strong>: {alert.currency} reached ₦
-                {alert.currentRate.toFixed(2)}
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: "14px", fontWeight: "600" }}>
+                  🔔 FX Alert Triggered!
+                </div>
+                <div
+                  style={{
+                    fontSize: window.innerWidth < 768 ? "13px" : "12px",
+                    marginTop: "6px",
+                    lineHeight: 1.5,
+                  }}
+                >
+                  {alert.currency} {alert.direction === "above" ? "reached" : "dropped to"} ₦
+                  {alert.currentRate.toFixed(2)} ({alert.direction}:{" "}
+                  ₦{alert.targetRate.toFixed(2)})
+                </div>
               </div>
               <button
                 onClick={() => dismissAlert(idx)}
                 style={{
-                  background: "none",
+                  background: "rgba(255,255,255,0.2)",
                   border: "none",
                   color: "white",
                   cursor: "pointer",
-                  fontSize: "16px",
-                  marginLeft: "10px",
+                  fontSize: "20px",
+                  width: "32px",
+                  height: "32px",
+                  borderRadius: "50%",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                  transition: "background 0.2s",
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.background = "rgba(255,255,255,0.3)";
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.background = "rgba(255,255,255,0.2)";
                 }}
               >
                 ✕
@@ -135,8 +212,7 @@ export default function FXAlerts({ fxRates, onAlertTriggered }) {
           e.target.style.background = "var(--color-background-primary)";
         }}
       >
-        🔔 FX Rate Alerts{" "}
-        {Object.keys(alerts).length > 0 && `(${Object.keys(alerts).length})`}
+        🔔 FX Rate Alerts {totalAlertCount > 0 && `(${totalAlertCount})`}
       </button>
 
       {/* Alert Modal */}
@@ -151,9 +227,9 @@ export default function FXAlerts({ fxRates, onAlertTriggered }) {
             background: "rgba(0, 0, 0, 0.5)",
             zIndex: 998,
             display: "flex",
-            alignItems: "center",
+            alignItems: "flex-end",
             justifyContent: "center",
-            animation: "fadeIn 0.2s ease",
+            padding: "20px",
           }}
           onClick={() => setIsOpen(false)}
         >
@@ -163,11 +239,11 @@ export default function FXAlerts({ fxRates, onAlertTriggered }) {
               borderRadius: "var(--border-radius-lg)",
               padding: "24px",
               maxWidth: "500px",
-              width: "90%",
-              maxHeight: "80vh",
+              width: "100%",
+              maxHeight: "85vh",
               overflowY: "auto",
               border: "1px solid var(--color-border-tertiary)",
-              animation: "slideUp 0.3s ease",
+              animation: "slideUpModal 0.3s ease",
             }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -203,217 +279,449 @@ export default function FXAlerts({ fxRates, onAlertTriggered }) {
               </button>
             </div>
 
-            {/* Add New Alert Form */}
+            {/* Tab Switcher */}
             <div
               style={{
-                background: "var(--color-background-secondary)",
-                padding: "16px",
-                borderRadius: "var(--border-radius-md)",
+                display: "flex",
+                gap: "8px",
                 marginBottom: "20px",
-                border: "1px solid var(--color-border-tertiary)",
+                borderBottom: "1px solid var(--color-border-tertiary)",
               }}
             >
-              <h3
+              <button
+                onClick={() => setShowHistory(false)}
                 style={{
-                  margin: "0 0 12px 0",
-                  fontSize: "14px",
-                  fontWeight: "600",
+                  padding: "10px 16px",
+                  border: "none",
+                  background: !showHistory
+                    ? "var(--color-background-secondary)"
+                    : "transparent",
                   color: "var(--color-text-primary)",
-                }}
-              >
-                Set Alert
-              </h3>
-              <form
-                onSubmit={handleAddAlert}
-                style={{
-                  display: "flex",
-                  gap: "8px",
-                  flexDirection: "column",
-                }}
-              >
-                <div style={{ display: "flex", gap: "8px" }}>
-                  <select
-                    value={selectedCurrency}
-                    onChange={(e) => setSelectedCurrency(e.target.value)}
-                    style={{
-                      flex: 1,
-                      padding: "8px 12px",
-                      borderRadius: "var(--border-radius-md)",
-                      border: "1px solid var(--color-border-tertiary)",
-                      background: "var(--color-background-primary)",
-                      color: "var(--color-text-primary)",
-                      fontSize: "13px",
-                      cursor: "pointer",
-                    }}
-                  >
-                    {FX_PAIRS.map((pair) => (
-                      <option key={pair} value={pair}>
-                        {pair}
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    type="number"
-                    placeholder="Target rate (₦)"
-                    value={targetRate}
-                    onChange={(e) => setTargetRate(e.target.value)}
-                    style={{
-                      flex: 1,
-                      padding: "8px 12px",
-                      borderRadius: "var(--border-radius-md)",
-                      border: "1px solid var(--color-border-tertiary)",
-                      background: "var(--color-background-primary)",
-                      color: "var(--color-text-primary)",
-                      fontSize: "13px",
-                    }}
-                  />
-                </div>
-                <button
-                  type="submit"
-                  style={{
-                    padding: "8px 12px",
-                    background: "#3B6D11",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "var(--border-radius-md)",
-                    fontSize: "13px",
-                    fontWeight: "600",
-                    cursor: "pointer",
-                    transition: "background 0.2s ease",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.target.style.background = "#2d5409";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.target.style.background = "#3B6D11";
-                  }}
-                >
-                  Add Alert
-                </button>
-              </form>
-            </div>
-
-            {/* Current Alerts */}
-            <div>
-              <h3
-                style={{
-                  margin: "0 0 12px 0",
-                  fontSize: "14px",
-                  fontWeight: "600",
-                  color: "var(--color-text-primary)",
+                  cursor: "pointer",
+                  fontSize: "13px",
+                  fontWeight: "500",
+                  borderBottom: !showHistory
+                    ? "2px solid #3B6D11"
+                    : "transparent",
+                  transition: "all 0.2s",
                 }}
               >
                 Active Alerts
-              </h3>
-              {Object.keys(alerts).length > 0 ? (
+              </button>
+              <button
+                onClick={() => setShowHistory(true)}
+                style={{
+                  padding: "10px 16px",
+                  border: "none",
+                  background: showHistory
+                    ? "var(--color-background-secondary)"
+                    : "transparent",
+                  color: "var(--color-text-primary)",
+                  cursor: "pointer",
+                  fontSize: "13px",
+                  fontWeight: "500",
+                  borderBottom: showHistory
+                    ? "2px solid #3B6D11"
+                    : "transparent",
+                  transition: "all 0.2s",
+                }}
+              >
+                History {alertHistory.length > 0 && `(${alertHistory.length})`}
+              </button>
+            </div>
+
+            {!showHistory ? (
+              <>
+                {/* Add New Alert Form */}
                 <div
                   style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "8px",
+                    background: "var(--color-background-secondary)",
+                    padding: "16px",
+                    borderRadius: "var(--border-radius-md)",
+                    marginBottom: "20px",
+                    border: "1px solid var(--color-border-tertiary)",
                   }}
                 >
-                  {FX_PAIRS.map((pair) => {
-                    if (!alerts[pair]) return null;
-                    const current = parseFloat(fxRates?.[pair] || 0);
-                    const target = alerts[pair];
-                    const isReached = current >= target;
-
-                    return (
-                      <div
-                        key={pair}
+                  <h3
+                    style={{
+                      margin: "0 0 14px 0",
+                      fontSize: "14px",
+                      fontWeight: "600",
+                      color: "var(--color-text-primary)",
+                    }}
+                  >
+                    Set New Alert
+                  </h3>
+                  <form
+                    onSubmit={handleAddAlert}
+                    style={{
+                      display: "flex",
+                      gap: "10px",
+                      flexDirection: "column",
+                    }}
+                  >
+                    <div style={{ display: "flex", gap: "8px" }}>
+                      <select
+                        value={selectedCurrency}
+                        onChange={(e) => setSelectedCurrency(e.target.value)}
                         style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                          padding: "10px 12px",
-                          background: isReached
-                            ? "#D1FAE5"
-                            : "var(--color-background-secondary)",
+                          flex: 1,
+                          padding: "8px 12px",
                           borderRadius: "var(--border-radius-md)",
-                          border: `1px solid ${
-                            isReached
-                              ? "#A7F3D0"
-                              : "var(--color-border-tertiary)"
-                          }`,
+                          border: "1px solid var(--color-border-tertiary)",
+                          background: "var(--color-background-primary)",
+                          color: "var(--color-text-primary)",
+                          fontSize: "13px",
+                          cursor: "pointer",
                         }}
                       >
-                        <div>
+                        {FX_PAIRS.map((pair) => (
+                          <option key={pair} value={pair}>
+                            {pair}
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        type="number"
+                        step="0.01"
+                        placeholder="Target rate"
+                        value={targetRate}
+                        onChange={(e) => setTargetRate(e.target.value)}
+                        style={{
+                          flex: 1,
+                          padding: "8px 12px",
+                          borderRadius: "var(--border-radius-md)",
+                          border: "1px solid var(--color-border-tertiary)",
+                          background: "var(--color-background-primary)",
+                          color: "var(--color-text-primary)",
+                          fontSize: "13px",
+                        }}
+                      />
+                    </div>
+
+                    {/* Direction Toggle */}
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: "8px",
+                        background: "var(--color-background-primary)",
+                        padding: "4px",
+                        borderRadius: "6px",
+                        border: "1px solid var(--color-border-tertiary)",
+                      }}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => setDirection("above")}
+                        style={{
+                          flex: 1,
+                          padding: "8px 12px",
+                          border: "none",
+                          borderRadius: "4px",
+                          background:
+                            direction === "above"
+                              ? "#3B6D11"
+                              : "transparent",
+                          color:
+                            direction === "above"
+                              ? "white"
+                              : "var(--color-text-secondary)",
+                          cursor: "pointer",
+                          fontSize: "12px",
+                          fontWeight: "600",
+                          transition: "all 0.2s",
+                        }}
+                      >
+                        ↑ Above
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDirection("below")}
+                        style={{
+                          flex: 1,
+                          padding: "8px 12px",
+                          border: "none",
+                          borderRadius: "4px",
+                          background:
+                            direction === "below"
+                              ? "#3B6D11"
+                              : "transparent",
+                          color:
+                            direction === "below"
+                              ? "white"
+                              : "var(--color-text-secondary)",
+                          cursor: "pointer",
+                          fontSize: "12px",
+                          fontWeight: "600",
+                          transition: "all 0.2s",
+                        }}
+                      >
+                        ↓ Below
+                      </button>
+                    </div>
+
+                    <button
+                      type="submit"
+                      style={{
+                        padding: "10px 12px",
+                        background: "#3B6D11",
+                        color: "white",
+                        border: "none",
+                        borderRadius: "var(--border-radius-md)",
+                        fontSize: "13px",
+                        fontWeight: "600",
+                        cursor: "pointer",
+                        transition: "background 0.2s ease",
+                      }}
+                      onMouseEnter={(e) => {
+                        e.target.style.background = "#2d5409";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.target.style.background = "#3B6D11";
+                      }}
+                    >
+                      Add Alert
+                    </button>
+                  </form>
+                </div>
+
+                {/* Current Alerts */}
+                <div>
+                  <h3
+                    style={{
+                      margin: "0 0 12px 0",
+                      fontSize: "14px",
+                      fontWeight: "600",
+                      color: "var(--color-text-primary)",
+                    }}
+                  >
+                    Active Alerts
+                  </h3>
+                  {totalAlertCount > 0 ? (
+                    <div
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "10px",
+                      }}
+                    >
+                      {FX_PAIRS.map((pair) => {
+                        const currencyAlerts = alerts[pair];
+                        if (!currencyAlerts) return null;
+
+                        const alertsList = Array.isArray(currencyAlerts)
+                          ? currencyAlerts
+                          : [{ id: "old", target: currencyAlerts, direction: "above" }];
+                        const current = parseFloat(fxRates?.[pair] || 0);
+
+                        return (
+                          <div key={pair}>
+                            <div
+                              style={{
+                                fontSize: "12px",
+                                fontWeight: "600",
+                                color: "var(--color-text-primary)",
+                                marginBottom: "8px",
+                              }}
+                            >
+                              {pair} • Current: ₦{current.toLocaleString()}
+                            </div>
+                            <div
+                              style={{
+                                display: "flex",
+                                flexDirection: "column",
+                                gap: "6px",
+                              }}
+                            >
+                              {alertsList.map((alert) => {
+                                const isTriggered =
+                                  alert.direction === "above"
+                                    ? current >= alert.target
+                                    : current <= alert.target;
+
+                                return (
+                                  <div
+                                    key={alert.id}
+                                    style={{
+                                      display: "flex",
+                                      justifyContent: "space-between",
+                                      alignItems: "center",
+                                      padding: "10px 12px",
+                                      background: isTriggered
+                                        ? "#D1FAE5"
+                                        : "var(--color-background-secondary)",
+                                      borderRadius: "var(--border-radius-md)",
+                                      border: `1px solid ${
+                                        isTriggered
+                                          ? "#A7F3D0"
+                                          : "var(--color-border-tertiary)"
+                                      }`,
+                                    }}
+                                  >
+                                    <div style={{ flex: 1 }}>
+                                      <div
+                                        style={{
+                                          fontSize: "12px",
+                                          fontWeight: "600",
+                                          color: "var(--color-text-primary)",
+                                        }}
+                                      >
+                                        {alert.direction === "above" ? "↑" : "↓"} ₦
+                                        {alert.target.toLocaleString()}
+                                      </div>
+                                      {isTriggered && (
+                                        <div
+                                          style={{
+                                            fontSize: "11px",
+                                            color: "#059669",
+                                            marginTop: "2px",
+                                            fontWeight: "500",
+                                          }}
+                                        >
+                                          ✓ Triggered!
+                                        </div>
+                                      )}
+                                    </div>
+                                    <button
+                                      onClick={() =>
+                                        handleRemoveAlert(pair, alert.id)
+                                      }
+                                      style={{
+                                        background: "none",
+                                        border: "none",
+                                        color: "var(--color-text-secondary)",
+                                        cursor: "pointer",
+                                        fontSize: "16px",
+                                        padding: "4px 8px",
+                                      }}
+                                      title="Remove alert"
+                                    >
+                                      ✕
+                                    </button>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div
+                      style={{
+                        fontSize: "13px",
+                        color: "var(--color-text-secondary)",
+                        textAlign: "center",
+                        padding: "20px",
+                        background: "var(--color-background-secondary)",
+                        borderRadius: "var(--border-radius-md)",
+                      }}
+                    >
+                      No alerts set yet. Create one above! 📍
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : (
+              /* Alert History */
+              <div>
+                <h3
+                  style={{
+                    margin: "0 0 12px 0",
+                    fontSize: "14px",
+                    fontWeight: "600",
+                    color: "var(--color-text-primary)",
+                  }}
+                >
+                  Triggered Alerts
+                </h3>
+                {alertHistory.length > 0 ? (
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "8px",
+                      maxHeight: "400px",
+                      overflowY: "auto",
+                    }}
+                  >
+                    {[...alertHistory].reverse().map((alert, idx) => {
+                      const date = new Date(alert.triggeredAt);
+                      const timeStr = date.toLocaleTimeString("en-US", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      });
+                      const dateStr = date.toLocaleDateString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                      });
+
+                      return (
+                        <div
+                          key={idx}
+                          style={{
+                            padding: "10px 12px",
+                            background: "var(--color-background-secondary)",
+                            borderRadius: "var(--border-radius-md)",
+                            border: "0.5px solid var(--color-border-tertiary)",
+                          }}
+                        >
                           <div
                             style={{
-                              fontSize: "13px",
+                              fontSize: "12px",
                               fontWeight: "600",
                               color: "var(--color-text-primary)",
                             }}
                           >
-                            {pair}
+                            {alert.currency} {alert.direction === "above" ? "↑" : "↓"}{" "}
+                            ₦{alert.currentRate.toFixed(2)}
                           </div>
                           <div
                             style={{
-                              fontSize: "12px",
+                              fontSize: "11px",
                               color: "var(--color-text-secondary)",
-                              marginTop: "2px",
+                              marginTop: "4px",
                             }}
                           >
-                            Current: ₦{current.toLocaleString()} / Target: ₦
-                            {target.toLocaleString()}
+                            Target: ₦{alert.targetRate.toFixed(2)} •{" "}
+                            {timeStr} ({dateStr})
                           </div>
-                          {isReached && (
-                            <div
-                              style={{
-                                fontSize: "11px",
-                                color: "#059669",
-                                marginTop: "2px",
-                                fontWeight: "500",
-                              }}
-                            >
-                              ✓ Alert reached!
-                            </div>
-                          )}
                         </div>
-                        <button
-                          onClick={() => handleRemoveAlert(pair)}
-                          style={{
-                            background: "none",
-                            border: "none",
-                            color: "var(--color-text-secondary)",
-                            cursor: "pointer",
-                            fontSize: "16px",
-                            padding: "4px",
-                          }}
-                          title="Remove alert"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div
-                  style={{
-                    fontSize: "13px",
-                    color: "var(--color-text-secondary)",
-                    textAlign: "center",
-                    padding: "20px",
-                    background: "var(--color-background-secondary)",
-                    borderRadius: "var(--border-radius-md)",
-                  }}
-                >
-                  No alerts set yet. Create one above to monitor FX rates! 📍
-                </div>
-              )}
-            </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div
+                    style={{
+                      fontSize: "13px",
+                      color: "var(--color-text-secondary)",
+                      textAlign: "center",
+                      padding: "20px",
+                      background: "var(--color-background-secondary)",
+                      borderRadius: "var(--border-radius-md)",
+                    }}
+                  >
+                    No alert history yet. 📊
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}
 
       <style>{`
-        @keyframes fadeIn {
-          from { opacity: 0; }
-          to { opacity: 1; }
+        @keyframes slideInAlert {
+          from {
+            opacity: 0;
+            transform: translateY(-20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
         }
-        @keyframes slideUp {
+        @keyframes slideUpModal {
           from {
             opacity: 0;
             transform: translateY(20px);
@@ -421,16 +729,6 @@ export default function FXAlerts({ fxRates, onAlertTriggered }) {
           to {
             opacity: 1;
             transform: translateY(0);
-          }
-        }
-        @keyframes slideIn {
-          from {
-            opacity: 0;
-            transform: translateX(20px);
-          }
-          to {
-            opacity: 1;
-            transform: translateX(0);
           }
         }
       `}</style>
