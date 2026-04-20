@@ -1,0 +1,10 @@
+# Supabase Cron Schedule Configuration
+# This file configures the daily FX rate fetch at 2am UTC
+
+functions:
+  - name: fetch-fx-rates
+    schedule: "0 2 * * *" # Daily at 2:00 AM UTC (cron format)
+    # To change the time:
+    # 0 14 * * * = 2 PM UTC
+    # 0 2 * * * = 2 AM UTC
+    # 0 9 * * * = 9 AM UTC

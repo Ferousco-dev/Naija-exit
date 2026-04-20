@@ -1,0 +1,93 @@
+:root {
+  --font-main: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-heading: 'Outfit', var(--font-main);
+  --font-sans: var(--font-main);
+
+  /* Premium Color Palette (HSL) */
+  --bg-color: 0 0% 2%;        /* Deepest Black */
+  --surface-color: 240 5% 8%; /* Dark Gray Surface */
+  --text-primary: 0 0% 98%;
+  --text-secondary: 240 4% 70%;
+  
+  --brand-primary: 142 70% 45%; /* Vibrant Green (Nigeria) */
+  --brand-secondary: 142 70% 25%;
+  --brand-accent: 45 100% 50%;  /* Premium Gold */
+
+  /* Component-Specific Variable Mappings */
+  --color-background-primary: hsl(var(--bg-color));
+  --color-background-secondary: hsl(var(--surface-color));
+  --color-background-tertiary: hsl(240, 5%, 4%);
+  
+  --color-text-primary: hsl(var(--text-primary));
+  --color-text-secondary: hsl(var(--text-secondary));
+  
+  --color-border-tertiary: hsla(0, 0%, 100%, 0.08);
+
+  --border-radius-md: 8px;
+  --border-radius-lg: 16px;
+
+  --glass-bg: hsla(0, 0%, 100%, 0.03);
+  --glass-border: hsla(0, 0%, 100%, 0.08);
+
+  --transition-smooth: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: var(--font-main);
+  background-color: hsl(var(--bg-color));
+  color: hsl(var(--text-primary));
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-heading);
+  letter-spacing: -0.02em;
+}
+
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Glassmorphism Utility */
+.glass {
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+  border-radius: 16px;
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: hsl(var(--bg-color));
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--surface-color));
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsla(0, 0%, 100%, 0.1);
+}
+
+/* Selection */
+::selection {
+  background: hsla(var(--brand-primary), 0.3);
+  color: white;
+}
