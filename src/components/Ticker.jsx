@@ -1,6 +1,38 @@
 export default function Ticker({ fxRates, signals, score }) {
+  // Helper function to format last updated time
+  const getLastUpdatedLabel = () => {
+    if (!fxRates?.lastUpdated) return null;
+
+    if (fxRates.lastUpdated === "offline") {
+      return "  ·  Offline mode";
+    }
+
+    try {
+      const lastUpdate = new Date(fxRates.lastUpdated);
+      const now = new Date();
+      const hoursAgo = Math.floor((now - lastUpdate) / 1000 / 60 / 60);
+
+      let label;
+      if (hoursAgo === 0) {
+        label = "just now";
+      } else if (hoursAgo === 1) {
+        label = "1 hour ago";
+      } else {
+        label = hoursAgo + " hours ago";
+      }
+
+      return "  ·  Updated " + label;
+    } catch (err) {
+      return null;
+    }
+  };
+
   const items = [
-    fxRates?.USD ? `₦/USD  ${parseFloat(fxRates.USD).toLocaleString()}` : null,
+    fxRates?.USD
+      ? `₦/USD  ${parseFloat(
+          fxRates.USD
+        ).toLocaleString()}${getLastUpdatedLabel()}`
+      : null,
     fxRates?.GBP ? `₦/GBP  ${parseFloat(fxRates.GBP).toLocaleString()}` : null,
     signals?.bayse?.politicalTension !== undefined
       ? `Political risk  ${Math.round(
