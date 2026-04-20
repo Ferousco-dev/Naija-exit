@@ -5,11 +5,20 @@ import {
   checkFXAlerts,
   getAlertHistory,
 } from "../services/exchangerate.js";
+import {
+  fetchAlertHistoryFromSupabase,
+  storeAlertHistoryToSupabase,
+} from "../services/supabase.js";
 
 const FX_PAIRS = ["USD", "GBP", "CAD", "EUR", "AUD"];
 
 // Generate unique ID for alerts
-const generateAlertId = () => `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+const generateAlertId = () => {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+};
 
 export default function FXAlerts({ fxRates, onAlertTriggered }) {
   const [alerts, setAlerts] = useState({});
@@ -21,12 +30,33 @@ export default function FXAlerts({ fxRates, onAlertTriggered }) {
   const [triggeredAlerts, setTriggeredAlerts] = useState([]);
   const [alertHistory, setAlertHistory] = useState([]);
 
+  const loadAlertHistory = async () => {
+    const local = getAlertHistory();
+    setAlertHistory(local || []);
+
+    const remote = await fetchAlertHistoryFromSupabase(null, 30);
+    if (remote && remote.length > 0) {
+      const mapped = remote
+        .map((row) => ({
+          id: row.id,
+          currency: row.currency,
+          targetRate: parseFloat(row.target_rate),
+          currentRate: parseFloat(row.current_rate),
+          direction: row.direction,
+          triggeredAt: row.triggered_at,
+        }))
+        .filter((row) => row.currency && !Number.isNaN(row.currentRate));
+
+      setAlertHistory(mapped.reverse());
+    }
+  };
+
   // Initialize from storage
   useEffect(() => {
     const savedAlerts = getFXAlerts();
     setAlerts(savedAlerts || {});
-    const history = getAlertHistory();
-    setAlertHistory(history || []);
+    loadAlertHistory();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Check for triggered alerts
@@ -40,8 +70,23 @@ export default function FXAlerts({ fxRates, onAlertTriggered }) {
           onAlertTriggered(alert);
         });
       }
+
+      if (triggered.length > 0) {
+        triggered.forEach((alert) => {
+          storeAlertHistoryToSupabase(alert, null);
+        });
+        setAlertHistory(getAlertHistory() || []);
+      }
     }
   }, [fxRates, onAlertTriggered]);
+
+  // Refresh history when the user opens the History tab
+  useEffect(() => {
+    if (isOpen && showHistory) {
+      loadAlertHistory();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, showHistory]);
 
   const handleAddAlert = (e) => {
     e.preventDefault();
@@ -77,9 +122,7 @@ export default function FXAlerts({ fxRates, onAlertTriggered }) {
   const handleRemoveAlert = (currency, alertId) => {
     const newAlerts = { ...alerts };
     if (Array.isArray(newAlerts[currency])) {
-      newAlerts[currency] = newAlerts[currency].filter(
-        (a) => a.id !== alertId
-      );
+      newAlerts[currency] = newAlerts[currency].filter((a) => a.id !== alertId);
       if (newAlerts[currency].length === 0) {
         delete newAlerts[currency];
       }
@@ -149,9 +192,10 @@ export default function FXAlerts({ fxRates, onAlertTriggered }) {
                     lineHeight: 1.5,
                   }}
                 >
-                  {alert.currency} {alert.direction === "above" ? "reached" : "dropped to"} ₦
-                  {alert.currentRate.toFixed(2)} ({alert.direction}:{" "}
-                  ₦{alert.targetRate.toFixed(2)})
+                  {alert.currency}{" "}
+                  {alert.direction === "above" ? "reached" : "dropped to"} ₦
+                  {alert.currentRate.toFixed(2)} ({alert.direction}: ₦
+                  {alert.targetRate.toFixed(2)})
                 </div>
               </div>
               <button
@@ -419,9 +463,7 @@ export default function FXAlerts({ fxRates, onAlertTriggered }) {
                           border: "none",
                           borderRadius: "4px",
                           background:
-                            direction === "above"
-                              ? "#3B6D11"
-                              : "transparent",
+                            direction === "above" ? "#3B6D11" : "transparent",
                           color:
                             direction === "above"
                               ? "white"
@@ -443,9 +485,7 @@ export default function FXAlerts({ fxRates, onAlertTriggered }) {
                           border: "none",
                           borderRadius: "4px",
                           background:
-                            direction === "below"
-                              ? "#3B6D11"
-                              : "transparent",
+                            direction === "below" ? "#3B6D11" : "transparent",
                           color:
                             direction === "below"
                               ? "white"
@@ -511,7 +551,13 @@ export default function FXAlerts({ fxRates, onAlertTriggered }) {
 
                         const alertsList = Array.isArray(currencyAlerts)
                           ? currencyAlerts
-                          : [{ id: "old", target: currencyAlerts, direction: "above" }];
+                          : [
+                              {
+                                id: "old",
+                                target: currencyAlerts,
+                                direction: "above",
+                              },
+                            ];
                         const current = parseFloat(fxRates?.[pair] || 0);
 
                         return (
@@ -566,8 +612,10 @@ export default function FXAlerts({ fxRates, onAlertTriggered }) {
                                           color: "var(--color-text-primary)",
                                         }}
                                       >
-                                        {alert.direction === "above" ? "↑" : "↓"} ₦
-                                        {alert.target.toLocaleString()}
+                                        {alert.direction === "above"
+                                          ? "↑"
+                                          : "↓"}{" "}
+                                        ₦{alert.target.toLocaleString()}
                                       </div>
                                       {isTriggered && (
                                         <div
@@ -673,8 +721,9 @@ export default function FXAlerts({ fxRates, onAlertTriggered }) {
                               color: "var(--color-text-primary)",
                             }}
                           >
-                            {alert.currency} {alert.direction === "above" ? "↑" : "↓"}{" "}
-                            ₦{alert.currentRate.toFixed(2)}
+                            {alert.currency}{" "}
+                            {alert.direction === "above" ? "↑" : "↓"} ₦
+                            {alert.currentRate.toFixed(2)}
                           </div>
                           <div
                             style={{
@@ -683,8 +732,8 @@ export default function FXAlerts({ fxRates, onAlertTriggered }) {
                               marginTop: "4px",
                             }}
                           >
-                            Target: ₦{alert.targetRate.toFixed(2)} •{" "}
-                            {timeStr} ({dateStr})
+                            Target: ₦{alert.targetRate.toFixed(2)} • {timeStr} (
+                            {dateStr})
                           </div>
                         </div>
                       );

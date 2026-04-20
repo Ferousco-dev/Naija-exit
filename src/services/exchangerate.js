@@ -82,10 +82,13 @@ export const checkFXAlerts = (currentRates) => {
   try {
     const alerts = getFXAlerts();
     const triggeredAlerts = [];
+    const previousRates = getPreviousRates() || {};
 
     Object.keys(alerts).forEach((currency) => {
       const currencyAlerts = alerts[currency] || [];
       const currentRate = parseFloat(currentRates[currency]);
+      const previousRateRaw = previousRates?.[currency];
+      const previousRate = previousRateRaw == null ? NaN : parseFloat(previousRateRaw);
 
       if (!isNaN(currentRate)) {
         currencyAlerts.forEach((alert) => {
@@ -93,19 +96,24 @@ export const checkFXAlerts = (currentRates) => {
           const direction = alert.direction || "above";
           let isTriggered = false;
 
-          if (direction === "above") {
-            isTriggered = currentRate >= targetRate;
-          } else if (direction === "below") {
-            isTriggered = currentRate <= targetRate;
+          // Only trigger on a crossing event to avoid repeated alerts
+          if (!isNaN(previousRate)) {
+            if (direction === "above") {
+              isTriggered = previousRate < targetRate && currentRate >= targetRate;
+            } else if (direction === "below") {
+              isTriggered = previousRate > targetRate && currentRate <= targetRate;
+            }
           }
 
           if (isTriggered) {
+            const triggeredAt = new Date().toISOString();
             const triggeredAlert = {
               id: alert.id,
               currency,
               targetRate,
               currentRate,
               direction,
+              triggeredAt,
               message: `FX Alert: ${currency} ${
                 direction === "above" ? "reached" : "dropped to"
               } ₦${currentRate.toFixed(2)} (${direction}: ₦${targetRate.toFixed(
@@ -118,6 +126,14 @@ export const checkFXAlerts = (currentRates) => {
         });
       }
     });
+
+    // Update previous rates for next check
+    const nextPrevious = {};
+    Object.keys(currentRates || {}).forEach((key) => {
+      const value = parseFloat(currentRates[key]);
+      if (!isNaN(value)) nextPrevious[key] = value;
+    });
+    storePreviousRates(nextPrevious);
 
     return triggeredAlerts;
   } catch (err) {
