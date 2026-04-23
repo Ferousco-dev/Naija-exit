@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import ParticleSquareCanvas from "../components/ParticleSquareCanvas";
 import { fetchFXRates } from "../services/exchangerate";
 import { getUser } from "../utils/storage";
 
@@ -42,6 +43,38 @@ function useInView(threshold = 0.15) {
     return () => obs.disconnect();
   }, [threshold]);
   return [ref, visible];
+}
+
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function useScrollPosition() {
+  const [scrollY, setScrollY] = useState(0);
+
+  useEffect(() => {
+    let frame = 0;
+
+    const updateScroll = () => {
+      frame = 0;
+      setScrollY(window.scrollY || window.pageYOffset || 0);
+    };
+
+    const onScroll = () => {
+      if (frame) return;
+      frame = requestAnimationFrame(updateScroll);
+    };
+
+    updateScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+
+    return () => {
+      if (frame) cancelAnimationFrame(frame);
+      window.removeEventListener("scroll", onScroll);
+    };
+  }, []);
+
+  return scrollY;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -167,6 +200,75 @@ const INJECTED_CSS = `
     background: hsla(0,0%,100%,0.06) !important;
     border-color: hsla(0,0%,100%,0.28) !important;
   }
+  .ne-nav-shell {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+  }
+  .ne-nav-links {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .ne-nav-link {
+    background: transparent;
+    border: 1px solid transparent;
+    color: hsl(240,4%,66%);
+    border-radius: 999px;
+    padding: 10px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: color 0.25s ease, border-color 0.25s ease, background 0.25s ease;
+  }
+  .ne-nav-link:hover {
+    color: hsl(0,0%,96%);
+    border-color: hsla(0,0%,100%,0.1);
+    background: hsla(0,0%,100%,0.04);
+  }
+  .ne-nav-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .ne-nav-dashboard {
+    background: hsla(0,0%,100%,0.03);
+    color: hsl(0,0%,88%);
+    border: 1px solid hsla(0,0%,100%,0.1);
+    border-radius: 999px;
+  }
+  .ne-nav-cta {
+    background: linear-gradient(135deg, hsl(142,70%,42%), hsl(142,70%,50%));
+    color: #fff;
+    border: 1px solid hsla(142,70%,60%,0.45);
+    border-radius: 999px;
+    box-shadow: 0 12px 28px hsla(142,70%,45%,0.24);
+  }
+  .ne-mobile-toggle {
+    display: none;
+    width: 46px;
+    height: 46px;
+    align-items: center;
+    justify-content: center;
+    background: hsla(0,0%,100%,0.04);
+    border: 1px solid hsla(0,0%,100%,0.1);
+    border-radius: 14px;
+    color: hsl(0,0%,96%);
+    cursor: pointer;
+  }
+  .ne-mobile-menu {
+    display: none;
+  }
+  .ne-section-pad {
+    padding: 104px 40px;
+  }
+  .ne-hero-pad {
+    padding: 148px 40px 92px;
+  }
+  .ne-nav-pad {
+    padding: 16px 28px;
+  }
 
   /* Responsive */
   @media (max-width: 900px) {
@@ -181,6 +283,33 @@ const INJECTED_CSS = `
     .ne-hero-pad    { padding: 120px 28px 60px !important; }
     .ne-nav-pad     { padding: 16px 24px !important; }
     .ne-footer-row  { flex-direction: column !important; gap: 12px !important; text-align: center !important; }
+  }
+  @media (max-width: 760px) {
+    .ne-nav-links,
+    .ne-nav-actions {
+      display: none !important;
+    }
+    .ne-mobile-toggle {
+      display: inline-flex !important;
+    }
+    .ne-mobile-menu {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      padding: 16px 24px 22px;
+      margin: 0 20px;
+      background: hsla(240,6%,7%,0.96);
+      border: 1px solid hsla(0,0%,100%,0.08);
+      border-top: none;
+      border-radius: 0 0 18px 18px;
+      backdrop-filter: blur(24px);
+      position: fixed;
+      top: 78px;
+      left: 0;
+      right: 0;
+      z-index: 190;
+      box-shadow: 0 28px 60px hsla(0,0%,0%,0.36);
+    }
   }
   @media (max-width: 600px) {
     .ne-feat-grid   { grid-template-columns: 1fr !important; }
@@ -320,6 +449,21 @@ const PERSONAS = [
   },
 ];
 
+const FAQS = [
+  {
+    q: "How is the Japa Score calculated?",
+    a: "It combines your savings progress, savings velocity, live FX movement, and Bayse market signals into one readiness score.",
+  },
+  {
+    q: "Are the exchange rates live?",
+    a: "Yes. The landing page and dashboard both pull from the same FX service so the rate card is not static demo data.",
+  },
+  {
+    q: "How long does onboarding take?",
+    a: "About two minutes. You enter your target country, savings, and monthly pace, then the app generates your score and action plan.",
+  },
+];
+
 // ─────────────────────────────────────────────────────────────────────────────
 //  SUB-COMPONENTS
 // ─────────────────────────────────────────────────────────────────────────────
@@ -427,12 +571,14 @@ export default function Landing() {
   const user = getUser();
 
   const [heroReady, setHeroReady] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [fxRates, setFxRates] = useState(null);
   const [statsRef, statsInView] = useInView(0.3);
   const [stepsRef, stepsInView] = useInView(0.1);
   const [featRef, featInView] = useInView(0.1);
   const [personaRef, personaInView] = useInView(0.1);
   const [probRef, probInView] = useInView(0.1);
+  const scrollY = useScrollPosition();
 
   useEffect(() => {
     const id = "ne-landing-css";
@@ -478,6 +624,26 @@ export default function Landing() {
   ];
 
   const tickerStr = [...liveTickerItems, ...liveTickerItems].join("   ·   ");
+  const navScroll = clamp(scrollY / 180, 0, 1);
+  const heroScroll = clamp(scrollY / 700, 0, 1);
+  const heroCopyOffset = heroScroll * -34;
+  const heroCardOffset = heroScroll * 28;
+  const heroCardRotate = heroScroll * -3.2;
+  const heroOpacity = 1 - heroScroll * 0.2;
+
+  const scrollToSection = (id) => {
+    const section = document.getElementById(id);
+    if (section) {
+      section.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+    setMobileMenuOpen(false);
+  };
+
+  const navLinks = [
+    { label: "Features", id: "features" },
+    { label: "How it Works", id: "how-it-works" },
+    { label: "FAQ", id: "faq" },
+  ];
 
   // ── Shared style objects ──────────────────────────────────────────────────
   const glass = {
@@ -544,6 +710,13 @@ export default function Landing() {
       }}
     >
       {/* ── GLOBAL BACKGROUND ──────────────────────────────────────── */}
+      <ParticleSquareCanvas
+        particleCount={576}
+        style={{
+          opacity: 0.22 + (1 - heroScroll) * 0.12,
+          transform: `translateY(${scrollY * -0.08}px) scale(${1 + heroScroll * 0.04})`,
+        }}
+      />
       <div
         style={{
           position: "fixed",
@@ -554,6 +727,7 @@ export default function Landing() {
           radial-gradient(ellipse 65% 55% at 10% 50%, hsla(142,70%,45%,0.065) 0%, transparent 55%),
           radial-gradient(ellipse 50% 40% at 88% 20%, hsla(45,100%,50%,0.04)  0%, transparent 50%)
         `,
+          transform: `translateY(${scrollY * -0.05}px)`,
         }}
       />
       <div
@@ -568,6 +742,29 @@ export default function Landing() {
           linear-gradient(90deg, hsla(0,0%,100%,0.025) 1px, transparent 1px)
         `,
           backgroundSize: "52px 52px",
+          transform: `translateY(${scrollY * -0.03}px)`,
+        }}
+      />
+      <div
+        style={{
+          position: "fixed",
+          inset: 0,
+          zIndex: 0,
+          pointerEvents: "none",
+          opacity: 0.4,
+          backgroundImage: `
+          linear-gradient(118deg, transparent 0 44%, hsla(142,70%,45%,0.11) 44.5%, transparent 45%),
+          linear-gradient(62deg, transparent 0 48%, hsla(45,100%,55%,0.08) 48.5%, transparent 49%),
+          linear-gradient(90deg, transparent 0 24%, hsla(142,70%,45%,0.06) 24.4%, transparent 24.8%),
+          radial-gradient(circle at 18% 22%, hsla(142,70%,45%,0.9) 0 2px, transparent 3px),
+          radial-gradient(circle at 34% 58%, hsla(45,100%,55%,0.8) 0 2px, transparent 3px),
+          radial-gradient(circle at 62% 30%, hsla(142,70%,45%,0.75) 0 2px, transparent 3px),
+          radial-gradient(circle at 78% 64%, hsla(45,100%,55%,0.75) 0 2px, transparent 3px),
+          radial-gradient(circle at 86% 18%, hsla(142,70%,45%,0.65) 0 2px, transparent 3px)
+        `,
+          backgroundSize:
+            "420px 420px, 520px 520px, 360px 360px, 100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%",
+          mixBlendMode: "screen",
         }}
       />
 
@@ -575,47 +772,120 @@ export default function Landing() {
       <nav
         style={{
           position: "fixed",
-          top: 0,
-          left: 30,
-          right: 0,
+          top: 10 + navScroll * 8,
+          left: 20,
+          right: 20,
           zIndex: 200,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          background: "hsla(0,0%,2%,0.82)",
+          background: `hsla(0,0%,2%,${0.72 + navScroll * 0.16})`,
           backdropFilter: "blur(24px)",
-          borderBottom: "1px solid hsla(0,0%,100%,0.06)",
+          border: "1px solid hsla(0,0%,100%,0.08)",
+          borderRadius: `${20 + navScroll * 4}px`,
+          boxShadow: `0 ${22 - navScroll * 8}px ${60 - navScroll * 14}px hsla(0,0%,0%,0.28)`,
+          transform: `translateY(${navScroll * -3}px)`,
+          transition:
+            "background 0.2s ease, box-shadow 0.2s ease, border-radius 0.2s ease, transform 0.2s ease, top 0.2s ease",
         }}
         className="ne-nav-pad"
       >
-        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-          <div
-            className="ne-pulse-dot"
-            style={{ width: "10px", height: "10px", background: G }}
-          />
-          <span
-            style={{
-              fontSize: "17px",
-              fontWeight: "700",
-              fontFamily: "var(--font-heading)",
-              letterSpacing: "-0.015em",
-            }}
+        <div className="ne-nav-shell">
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            <div
+              className="ne-pulse-dot"
+              style={{ width: "10px", height: "10px", background: G }}
+            />
+            <span
+              style={{
+                fontSize: "17px",
+                fontWeight: "700",
+                fontFamily: "var(--font-heading)",
+                letterSpacing: "-0.015em",
+              }}
+            >
+              Naija Exit
+            </span>
+          </div>
+          <div className="ne-nav-links">
+            {navLinks.map((link) => (
+              <button
+                key={link.id}
+                className="ne-nav-link"
+                onClick={() => scrollToSection(link.id)}
+              >
+                {link.label}
+              </button>
+            ))}
+          </div>
+          <div className="ne-nav-actions">
+            {user && (
+              <button
+                className="ne-btn-ghost ne-nav-dashboard"
+                onClick={() => navigate("/dashboard")}
+                style={{
+                  padding: "10px 18px",
+                  fontSize: "13px",
+                  fontWeight: "700",
+                  cursor: "pointer",
+                }}
+              >
+                Dashboard
+              </button>
+            )}
+            <button
+              className="ne-btn-primary ne-nav-cta"
+              onClick={() => navigate("/onboarding")}
+              style={{
+                padding: "11px 22px",
+                fontSize: "13px",
+                fontWeight: "800",
+                cursor: "pointer",
+                letterSpacing: "-0.01em",
+              }}
+            >
+              Get Japa Score
+            </button>
+          </div>
+          <button
+            className="ne-mobile-toggle"
+            onClick={() => setMobileMenuOpen((open) => !open)}
+            aria-label="Toggle navigation menu"
+            aria-expanded={mobileMenuOpen}
           >
-            Naija Exit
-          </span>
+            <span
+              style={{
+                fontSize: "22px",
+                lineHeight: 1,
+                transform: mobileMenuOpen ? "rotate(90deg)" : "none",
+                transition: "transform 0.2s ease",
+              }}
+            >
+              {mobileMenuOpen ? "×" : "☰"}
+            </span>
+          </button>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+      </nav>
+      {mobileMenuOpen && (
+        <div className="ne-mobile-menu">
+          {navLinks.map((link) => (
+            <button
+              key={link.id}
+              className="ne-nav-link"
+              onClick={() => scrollToSection(link.id)}
+              style={{ justifyContent: "flex-start", textAlign: "left" }}
+            >
+              {link.label}
+            </button>
+          ))}
           {user && (
             <button
-              className="ne-btn-ghost"
-              onClick={() => navigate("/dashboard")}
+              className="ne-btn-ghost ne-nav-dashboard"
+              onClick={() => {
+                setMobileMenuOpen(false);
+                navigate("/dashboard");
+              }}
               style={{
-                background: "transparent",
-                color: "hsl(0,0%,65%)",
-                border: "1px solid hsla(0,0%,100%,0.1)",
-                borderRadius: "8px",
-                padding: "8px 18px",
-                fontSize: "13px",
+                padding: "12px 16px",
+                fontSize: "14px",
+                fontWeight: "700",
                 cursor: "pointer",
               }}
             >
@@ -623,24 +893,22 @@ export default function Landing() {
             </button>
           )}
           <button
-            className="ne-btn-primary"
-            onClick={() => navigate("/onboarding")}
+            className="ne-btn-primary ne-nav-cta"
+            onClick={() => {
+              setMobileMenuOpen(false);
+              navigate("/onboarding");
+            }}
             style={{
-              background: G,
-              color: "#fff",
-              border: "none",
-              borderRadius: "8px",
-              padding: "9px 22px",
-              fontSize: "13px",
-              fontWeight: "700",
+              padding: "13px 18px",
+              fontSize: "14px",
+              fontWeight: "800",
               cursor: "pointer",
-              letterSpacing: "-0.01em",
             }}
           >
-            Get Japa Score →
+            Get Japa Score
           </button>
         </div>
-      </nav>
+      )}
 
       {/* ── HERO ───────────────────────────────────────────────────── */}
       <section
@@ -655,10 +923,17 @@ export default function Landing() {
           margin: "0 auto",
           position: "relative",
           zIndex: 1,
+          opacity: heroOpacity,
+          transition: "opacity 0.18s linear",
         }}
       >
         {/* ── Left copy ── */}
-        <div>
+        <div
+          style={{
+            transform: `translate3d(0, ${heroCopyOffset}px, 0)`,
+            transition: "transform 0.12s linear",
+          }}
+        >
           <h1
             className="ne-hl"
             style={{
@@ -777,136 +1052,142 @@ export default function Landing() {
 
         {/* ── Right: Score card ── */}
         <div
-          className="ne-score-in ne-float"
           style={{
-            ...glass,
-            padding: "32px",
-            boxShadow:
-              "0 40px 90px hsla(0,0%,0%,0.55), 0 0 0 1px hsla(142,70%,45%,0.08)",
-            position: "relative",
-            overflow: "hidden",
+            transform: `translate3d(0, ${heroCardOffset}px, 0) rotate(${heroCardRotate}deg)`,
+            transition: "transform 0.12s linear",
           }}
         >
-          <div className="ne-scan-line" />
-
-          {/* Card top */}
           <div
+            className="ne-score-in ne-float"
             style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginBottom: "26px",
+              ...glass,
+              padding: "32px",
+              boxShadow:
+                "0 40px 90px hsla(0,0%,0%,0.55), 0 0 0 1px hsla(142,70%,45%,0.08)",
+              position: "relative",
+              overflow: "hidden",
             }}
           >
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <div
-                className="ne-pulse-dot"
-                style={{ width: "8px", height: "8px", background: G }}
-              />
-              <span style={{ fontSize: "14px", fontWeight: "700" }}>
-                Naija Exit
-              </span>
-            </div>
-            <span
+            <div className="ne-scan-line" />
+
+            {/* Card top */}
+            <div
               style={{
-                fontSize: "12px",
-                color: "hsl(240,4%,55%)",
-                background: "hsla(0,0%,100%,0.05)",
-                border: "1px solid hsla(0,0%,100%,0.08)",
-                borderRadius: "6px",
-                padding: "4px 10px",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: "26px",
               }}
             >
-              🇨🇦 Canada · Adaeze
-            </span>
-          </div>
-
-          {/* Score ring + badge */}
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "24px",
-              marginBottom: "26px",
-            }}
-          >
-            <svg
-              width="114"
-              height="114"
-              viewBox="0 0 114 114"
-              style={{ flexShrink: 0 }}
-            >
-              <circle
-                cx="57"
-                cy="57"
-                r="48"
-                fill="none"
-                stroke="hsla(0,0%,100%,0.06)"
-                strokeWidth="8"
-              />
-              <circle
-                cx="57"
-                cy="57"
-                r="48"
-                fill="none"
-                stroke={G}
-                strokeWidth="8"
-                strokeLinecap="round"
-                strokeDasharray={`${(67 / 100) * 301.6} 301.6`}
-                transform="rotate(-90 57 57)"
-              />
-              <text
-                x="57"
-                y="51"
-                textAnchor="middle"
-                fill="hsl(0,0%,97%)"
-                fontSize="26"
-                fontWeight="700"
-                fontFamily="Outfit,sans-serif"
-              >
-                67
-              </text>
-              <text
-                x="57"
-                y="67"
-                textAnchor="middle"
-                fill="hsl(240,4%,52%)"
-                fontSize="11"
-                fontFamily="Inter,sans-serif"
-              >
-                /100
-              </text>
-            </svg>
-            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <div
+                  className="ne-pulse-dot"
+                  style={{ width: "8px", height: "8px", background: G }}
+                />
+                <span style={{ fontSize: "14px", fontWeight: "700" }}>
+                  Naija Exit
+                </span>
+              </div>
               <span
                 style={{
-                  display: "inline-block",
-                  background: "hsla(142,70%,45%,0.14)",
-                  color: G,
-                  border: "1px solid hsla(142,70%,45%,0.28)",
-                  borderRadius: "6px",
-                  padding: "4px 11px",
-                  fontSize: "11px",
-                  fontWeight: "800",
-                  letterSpacing: "0.06em",
-                  marginBottom: "10px",
-                }}
-              >
-                ALMOST READY
-              </span>
-              <p
-                style={{
                   fontSize: "12px",
-                  color: "hsl(240,4%,58%)",
-                  lineHeight: "1.65",
-                  maxWidth: "165px",
+                  color: "hsl(240,4%,55%)",
+                  background: "hsla(0,0%,100%,0.05)",
+                  border: "1px solid hsla(0,0%,100%,0.08)",
+                  borderRadius: "6px",
+                  padding: "4px 10px",
                 }}
               >
-                Hold conversion. Bayse political risk elevated. FX trending weak
-                this week.
-              </p>
+                🇨🇦 Canada · Adaeze
+              </span>
             </div>
-          </div>
+
+            {/* Score ring + badge */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "24px",
+                marginBottom: "26px",
+              }}
+            >
+              <svg
+                width="114"
+                height="114"
+                viewBox="0 0 114 114"
+                style={{ flexShrink: 0 }}
+              >
+                <circle
+                  cx="57"
+                  cy="57"
+                  r="48"
+                  fill="none"
+                  stroke="hsla(0,0%,100%,0.06)"
+                  strokeWidth="8"
+                />
+                <circle
+                  cx="57"
+                  cy="57"
+                  r="48"
+                  fill="none"
+                  stroke={G}
+                  strokeWidth="8"
+                  strokeLinecap="round"
+                  strokeDasharray={`${(67 / 100) * 301.6} 301.6`}
+                  transform="rotate(-90 57 57)"
+                />
+                <text
+                  x="57"
+                  y="51"
+                  textAnchor="middle"
+                  fill="hsl(0,0%,97%)"
+                  fontSize="26"
+                  fontWeight="700"
+                  fontFamily="Outfit,sans-serif"
+                >
+                  67
+                </text>
+                <text
+                  x="57"
+                  y="67"
+                  textAnchor="middle"
+                  fill="hsl(240,4%,52%)"
+                  fontSize="11"
+                  fontFamily="Inter,sans-serif"
+                >
+                  /100
+                </text>
+              </svg>
+              <div>
+                <span
+                  style={{
+                    display: "inline-block",
+                    background: "hsla(142,70%,45%,0.14)",
+                    color: G,
+                    border: "1px solid hsla(142,70%,45%,0.28)",
+                    borderRadius: "6px",
+                    padding: "4px 11px",
+                    fontSize: "11px",
+                    fontWeight: "800",
+                    letterSpacing: "0.06em",
+                    marginBottom: "10px",
+                  }}
+                >
+                  ALMOST READY
+                </span>
+                <p
+                  style={{
+                    fontSize: "12px",
+                    color: "hsl(240,4%,58%)",
+                    lineHeight: "1.65",
+                    maxWidth: "165px",
+                  }}
+                >
+                  Hold conversion. Bayse political risk elevated. FX trending weak
+                  this week.
+                </p>
+              </div>
+            </div>
 
           {/* Signal bars */}
           <div style={{ marginBottom: "20px" }}>
@@ -997,6 +1278,7 @@ export default function Landing() {
             ))}
           </div>
         </div>
+        </div>
       </section>
 
       {/* ── FX TICKER ──────────────────────────────────────────────── */}
@@ -1009,6 +1291,8 @@ export default function Landing() {
           padding: "12px 0",
           position: "relative",
           zIndex: 1,
+          transform: `translateY(${scrollY > 60 ? -6 : 0}px)`,
+          transition: "transform 0.2s ease",
         }}
       >
         <div
@@ -1172,6 +1456,7 @@ export default function Landing() {
       {/* ── HOW IT WORKS ───────────────────────────────────────────── */}
       <section
         ref={stepsRef}
+        id="how-it-works"
         className="ne-section-pad"
         style={{
           background: "hsla(240,5%,4%,0.6)",
@@ -1263,6 +1548,7 @@ export default function Landing() {
       {/* ── FEATURES ───────────────────────────────────────────────── */}
       <section
         ref={featRef}
+        id="features"
         className="ne-section-pad"
         style={{
           maxWidth: "1100px",
@@ -1423,6 +1709,63 @@ export default function Landing() {
               </div>
             ))}
           </div>
+        </div>
+      </section>
+
+      {/* ── CTA ────────────────────────────────────────────────────── */}
+      <section
+        id="faq"
+        className="ne-section-pad"
+        style={{
+          maxWidth: "1100px",
+          margin: "0 auto",
+          position: "relative",
+          zIndex: 1,
+        }}
+      >
+        {sectionHead(
+          "FAQ",
+          "Quick answers before you start.",
+          "No guesswork. No hidden logic.",
+          GOLD,
+        )}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+            gap: "18px",
+          }}
+        >
+          {FAQS.map((item) => (
+            <div
+              key={item.q}
+              className="ne-card-hover ne-gold-hover"
+              style={{
+                ...glass,
+                padding: "24px",
+              }}
+            >
+              <h3
+                style={{
+                  fontSize: "16px",
+                  fontWeight: "700",
+                  fontFamily: "var(--font-heading)",
+                  marginBottom: "10px",
+                }}
+              >
+                {item.q}
+              </h3>
+              <p
+                style={{
+                  fontSize: "13px",
+                  color: "hsl(240,4%,58%)",
+                  lineHeight: "1.72",
+                }}
+              >
+                {item.a}
+              </p>
+            </div>
+          ))}
         </div>
       </section>
 
