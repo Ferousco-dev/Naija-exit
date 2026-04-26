@@ -2,11 +2,13 @@ import React, { useEffect, useState } from "react";
 import { useNavigate, Navigate } from "react-router-dom";
 import { getUser, clearUser } from "../utils/storage";
 import { useJapaScore } from "../hooks/useJapaScore";
+import { useViewport } from "../hooks/useViewport";
 import { addMonthlyEntry, getHistory } from "../utils/historyManager";
 import ScoreGauge from "../components/ScoreGauge";
 import SignalCards from "../components/SignalCards";
 import ScoreHistory from "../components/ScoreHistory";
 import AIInsight from "../components/AIInsight";
+import BayseIntelligenceStudio from "../components/BayseIntelligenceStudio";
 import Sidebar from "../components/Sidebar";
 import Ticker from "../components/Ticker";
 import Topbar from "../components/Topbar";
@@ -17,6 +19,8 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const user = getUser();
   const [toast, setToast] = useState("");
+  const { isMobile, isTablet } = useViewport();
+  const isCompact = isMobile || isTablet;
 
   // Hook must be called unconditionally (before any return)
   const { score, status, signals, fxRates, loading } = useJapaScore(user);
@@ -78,25 +82,31 @@ export default function Dashboard() {
       }}
     >
       <div style={{ position: "sticky", top: 0, zIndex: 100 }}>
-        <Topbar user={user} onLogout={handleLogout} />
+        <Topbar user={user} onLogout={handleLogout} compact={isMobile} />
       </div>
 
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "1fr 300px",
+          gridTemplateColumns: isMobile
+            ? "minmax(0, 1fr)"
+            : isTablet
+            ? "minmax(0, 1fr) 280px"
+            : "minmax(0, 1fr) 320px",
           flex: 1,
           overflow: "hidden",
         }}
       >
         <div
           style={{
-            padding: "24px",
-            paddingBottom: "80px",
-            borderRight: "0.5px solid var(--color-border-tertiary)",
+            padding: isMobile ? "14px" : "24px",
+            paddingBottom: isMobile ? "24px" : "80px",
+            borderRight: isMobile
+              ? "none"
+              : "0.5px solid var(--color-border-tertiary)",
             background: "var(--color-background-primary)",
             overflowY: "auto",
-            height: "calc(100vh - 60px)",
+            height: isMobile ? "auto" : "calc(100vh - 60px)",
           }}
         >
           <div
@@ -112,7 +122,9 @@ export default function Dashboard() {
             style={{
               display: "flex",
               alignItems: "center",
+              flexWrap: "wrap",
               justifyContent: "space-between",
+              gap: "8px",
               marginBottom: "24px",
             }}
           >
@@ -150,9 +162,10 @@ export default function Dashboard() {
           <div
             style={{
               display: "flex",
-              alignItems: "center",
-              gap: "32px",
-              padding: "24px",
+              alignItems: isCompact ? "flex-start" : "center",
+              flexDirection: isCompact ? "column" : "row",
+              gap: isCompact ? "16px" : "32px",
+              padding: isCompact ? "16px" : "24px",
               background: "var(--color-background-secondary)",
               borderRadius: "var(--border-radius-lg)",
               border: "0.5px solid var(--color-border-tertiary)",
@@ -211,6 +224,7 @@ export default function Dashboard() {
                 onClick={handleShareScore}
                 style={{
                   marginTop: "12px",
+                  width: isMobile ? "100%" : "auto",
                   padding: "6px 16px",
                   borderRadius: "6px",
                   border: "0.5px solid #3B6D11",
@@ -235,7 +249,12 @@ export default function Dashboard() {
             </div>
           </div>
 
-          <SignalCards signals={signals} />
+          <SignalCards signals={signals} compact={isCompact} />
+          <BayseIntelligenceStudio
+            signals={signals}
+            currentScore={score}
+            compact={isCompact}
+          />
           <ScoreHistory currentScore={score} />
           <AIInsight
             score={score}
@@ -247,20 +266,35 @@ export default function Dashboard() {
 
         <div
           style={{
-            position: "sticky",
-            top: 0,
-            height: "calc(100vh - 60px)",
+            position: isMobile ? "relative" : "sticky",
+            top: isMobile ? "auto" : 0,
+            height: isMobile ? "auto" : "calc(100vh - 60px)",
             overflow: "hidden",
+            borderTop: isMobile ? "0.5px solid var(--color-border-tertiary)" : 0,
           }}
         >
-          <Sidebar user={user} signals={signals} fxRates={fxRates} />
+          <Sidebar
+            user={user}
+            signals={signals}
+            fxRates={fxRates}
+            compact={isMobile}
+          />
         </div>
       </div>
 
       <div
-        style={{ position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 50 }}
+        style={
+          isMobile
+            ? { position: "relative", zIndex: 10 }
+            : { position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 50 }
+        }
       >
-        <Ticker fxRates={fxRates} signals={signals} score={score} />
+        <Ticker
+          fxRates={fxRates}
+          signals={signals}
+          score={score}
+          compact={isMobile}
+        />
       </div>
 
       <FloatingChatBot

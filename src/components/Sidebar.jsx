@@ -19,7 +19,7 @@ const FLAGS = {
 };
 const FX_PAIRS = ["USD", "GBP", "CAD", "EUR", "AUD"];
 
-export default function Sidebar({ user, signals, fxRates }) {
+export default function Sidebar({ user, signals, fxRates, compact = false }) {
   const [previousRates, setPreviousRates] = useState(null);
 
   useEffect(() => {
@@ -72,9 +72,9 @@ export default function Sidebar({ user, signals, fxRates }) {
   return (
     <div
       style={{
-        padding: "20px",
+        padding: compact ? "14px" : "20px",
         background: "var(--color-background-secondary)",
-        borderLeft: "0.5px solid var(--color-border-tertiary)",
+        borderLeft: compact ? "none" : "0.5px solid var(--color-border-tertiary)",
         overflowY: "auto",
       }}
     >

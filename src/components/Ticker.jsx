@@ -1,4 +1,4 @@
-export default function Ticker({ fxRates, signals, score }) {
+export default function Ticker({ fxRates, signals, score, compact = false }) {
   // Helper function to format last updated time
   const getLastUpdatedLabel = () => {
     if (!fxRates?.lastUpdated) return null;
@@ -44,6 +44,9 @@ export default function Ticker({ fxRates, signals, score }) {
           (signals.bayse.cryptoBullishness || 0) * 100
         )}%`
       : null,
+    signals?.bayse?.totalMarketsAnalyzed !== undefined
+      ? `Bayse markets  ${signals.bayse.totalMarketsAnalyzed || 0}`
+      : null,
     score ? `Japa Score  ${score}/100` : null,
   ].filter(Boolean);
 
@@ -52,8 +55,8 @@ export default function Ticker({ fxRates, signals, score }) {
       style={{
         display: "flex",
         alignItems: "center",
-        gap: "32px",
-        padding: "10px 24px",
+        gap: compact ? "18px" : "32px",
+        padding: compact ? "10px 14px" : "10px 24px",
         borderTop: "0.5px solid var(--color-border-tertiary)",
         background: "var(--color-background-secondary)",
         overflowX: "auto",
@@ -64,7 +67,7 @@ export default function Ticker({ fxRates, signals, score }) {
           key={i}
           style={{
             whiteSpace: "nowrap",
-            fontSize: "12px",
+            fontSize: compact ? "11px" : "12px",
             color: "var(--color-text-secondary)",
             flexShrink: 0,
           }}

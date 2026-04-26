@@ -28,7 +28,7 @@ const getBadgeForSignal = (signal) => {
   return { label: "Weak", type: "bad" };
 };
 
-export default function SignalCards({ signals }) {
+export default function SignalCards({ signals, compact = false }) {
   if (!signals) return null;
 
   // Card 1: Savings Readiness
@@ -133,7 +133,9 @@ export default function SignalCards({ signals }) {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "1fr 1fr",
+          gridTemplateColumns: compact
+            ? "minmax(0, 1fr)"
+            : "repeat(2, minmax(0, 1fr))",
           gap: "10px",
           marginBottom: "20px",
         }}
@@ -146,7 +148,8 @@ export default function SignalCards({ signals }) {
               border: "0.5px solid var(--color-border-tertiary)",
               borderRadius: "var(--border-radius-md)",
               padding: "12px",
-              ...(idx === 4 && { gridColumn: "1 / -1", maxWidth: "50%" }),
+              ...(idx === 4 &&
+                !compact && { gridColumn: "1 / -1", maxWidth: "50%" }),
             }}
           >
             <div

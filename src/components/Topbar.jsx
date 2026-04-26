@@ -1,11 +1,11 @@
-export default function Topbar({ user, onLogout }) {
+export default function Topbar({ user, onLogout, compact = false }) {
   return (
     <div
       style={{
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
-        padding: "14px 24px",
+        padding: compact ? "12px 14px" : "14px 24px",
         borderBottom: "0.5px solid var(--color-border-tertiary)",
         background: "var(--color-background-primary)",
       }}
@@ -37,11 +37,12 @@ export default function Topbar({ user, onLogout }) {
             color: "var(--color-text-secondary)",
             border: "0.5px solid var(--color-border-tertiary)",
             borderRadius: "var(--border-radius-md)",
-            padding: "4px 10px",
+            padding: compact ? "4px 8px" : "4px 10px",
             background: "var(--color-background-secondary)",
+            whiteSpace: "nowrap",
           }}
         >
-          🇳🇬 {user?.country}
+          🇳🇬 {compact ? user?.country?.slice(0, 3) : user?.country}
         </div>
         <div
           style={{

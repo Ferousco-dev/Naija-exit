@@ -14,6 +14,7 @@ import {
   saveFXSnapshot,
   getFXHistory,
   saveScoreSnapshot,
+  saveBayseSnapshot,
 } from "../utils/storage";
 
 // Fallback costs if AI estimation fails (in NGN)
@@ -43,6 +44,11 @@ const FALLBACK_BAYSE_SCORE = {
   topSignal: "Market data unavailable",
   sentimentScore: 0.5,
   signal: "neutral",
+  confidenceScore: 0.25,
+  confidenceLabel: "low",
+  categoryBreakdown: [],
+  sampleEvents: [],
+  lastUpdated: new Date().toISOString(),
 };
 
 export const useJapaScore = (user) => {
@@ -140,6 +146,7 @@ export const useJapaScore = (user) => {
 
         // Save score history
         saveScoreSnapshot(calculated);
+        saveBayseSnapshot(bayseScore);
 
         setScore(calculated);
         setStatus(getScoreStatus(calculated));

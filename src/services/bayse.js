@@ -2,6 +2,28 @@ const BASE_URL = "/api-bayse";
 const API_KEY = import.meta.env.VITE_BAYSE_PUBLIC_KEY;
 
 const clamp = (value) => Math.min(1, Math.max(0, value));
+const asArray = (value) => (Array.isArray(value) ? value : []);
+
+const buildFallbackSentiment = (topSignal) => ({
+  politicalTension: 0.45,
+  cryptoBullishness: 0.55,
+  marketActivity: 0.5,
+  totalMarketsAnalyzed: 0,
+  topSignal,
+  sentimentScore: 0.5,
+  signal: "neutral",
+  confidenceScore: 0.25,
+  confidenceLabel: "low",
+  categoryBreakdown: [],
+  sampleEvents: [],
+  lastUpdated: new Date().toISOString(),
+});
+
+const getConfidenceLabel = (confidence) => {
+  if (confidence >= 0.7) return "high";
+  if (confidence >= 0.45) return "medium";
+  return "low";
+};
 
 export const fetchPoliticalSignal = async () => {
   try {
@@ -77,15 +99,7 @@ export const fetchMarketSentimentScore = async () => {
   try {
     if (!API_KEY || API_KEY === "your_bayse_public_key_here") {
       console.warn("Bayse API key not set, using fallback sentiment score");
-      return {
-        politicalTension: 0.45,
-        cryptoBullishness: 0.55,
-        marketActivity: 0.5,
-        totalMarketsAnalyzed: 0,
-        topSignal: "Data unavailable — set Bayse API key",
-        sentimentScore: 0.5,
-        signal: "neutral",
-      };
+      return buildFallbackSentiment("Data unavailable — set Bayse API key");
     }
 
     // Add timeout to prevent hanging
@@ -103,19 +117,11 @@ export const fetchMarketSentimentScore = async () => {
       console.warn(
         `Bayse sentiment API returned ${res.status}, using fallback`
       );
-      return {
-        politicalTension: 0.45,
-        cryptoBullishness: 0.55,
-        marketActivity: 0.5,
-        totalMarketsAnalyzed: 0,
-        topSignal: "API error — using fallback signals",
-        sentimentScore: 0.5,
-        signal: "neutral",
-      };
+      return buildFallbackSentiment("API error — using fallback signals");
     }
 
     const data = await res.json();
-    const events = data.events || [];
+    const events = asArray(data.events);
 
     let politicalWeightedSum = 0;
     let politicalWeightSum = 0;
@@ -123,23 +129,45 @@ export const fetchMarketSentimentScore = async () => {
     let cryptoWeightSum = 0;
     let totalOrders = 0;
     let marketsAnalyzed = 0;
+    const categoryBuckets = {};
+    const sampleEvents = [];
 
     events.forEach((event) => {
-      const category = event.category || "";
-      event.markets?.forEach((market) => {
-        const weight = market.totalOrders || 1;
+      const category = String(event.category || "General");
+      const categoryKey = category.trim() || "General";
+
+      if (!categoryBuckets[categoryKey]) {
+        categoryBuckets[categoryKey] = {
+          category: categoryKey,
+          markets: 0,
+          orders: 0,
+        };
+      }
+
+      const eventTitle =
+        String(event.title || event.name || event.question || "").trim() ||
+        null;
+      if (eventTitle && sampleEvents.length < 4) {
+        sampleEvents.push(eventTitle);
+      }
+
+      asArray(event.markets).forEach((market) => {
+        const rawOrders = Number(market.totalOrders);
+        const weight = rawOrders > 0 ? rawOrders : 1;
         totalOrders += weight;
         marketsAnalyzed++;
+        categoryBuckets[categoryKey].markets += 1;
+        categoryBuckets[categoryKey].orders += rawOrders > 0 ? rawOrders : 0;
 
         // Politics markets
-        if (category.toLowerCase().includes("politics")) {
+        if (categoryKey.toLowerCase().includes("politics")) {
           const tension = market.outcome1Price || 0;
           politicalWeightedSum += tension * weight;
           politicalWeightSum += weight;
         }
 
         // Crypto markets
-        if (category.toLowerCase().includes("crypto")) {
+        if (categoryKey.toLowerCase().includes("crypto")) {
           if (market.outcome1Label?.toLowerCase().includes("up")) {
             const bullish = market.outcome1Price || 0;
             cryptoWeightedSum += bullish * weight;
@@ -159,8 +187,8 @@ export const fetchMarketSentimentScore = async () => {
       cryptoWeightSum > 0 ? clamp(cryptoWeightedSum / cryptoWeightSum) : 0.55;
 
     // Market activity score: normalize total orders to 0-1
-    // Assume 1000+ orders = high activity (1.0), 0 = low activity (0)
-    const marketActivity = Math.min(1, totalOrders / 1000);
+    // Assume 1200+ weighted orders = high activity (1.0), 0 = low activity (0)
+    const marketActivity = Math.min(1, totalOrders / 1200);
 
     // Combined sentiment:
     // High political tension (bad), low crypto bullishness (bad), high activity = low score
@@ -191,6 +219,21 @@ export const fetchMarketSentimentScore = async () => {
       topSignal = "Low market activity — limited signal confidence";
     }
 
+    const categoryBreakdown = Object.values(categoryBuckets)
+      .sort((a, b) => b.markets - a.markets)
+      .slice(0, 3)
+      .map((bucket) => ({
+        category: bucket.category,
+        markets: bucket.markets,
+        marketShare:
+          marketsAnalyzed > 0 ? clamp(bucket.markets / marketsAnalyzed) : 0,
+        orders: bucket.orders,
+      }));
+
+    const coverageScore = Math.min(1, marketsAnalyzed / 45);
+    const confidenceScore = clamp(coverageScore * 0.65 + marketActivity * 0.35);
+    const confidenceLabel = getConfidenceLabel(confidenceScore);
+
     return {
       politicalTension: clamp(politicalTension),
       cryptoBullishness: clamp(cryptoBullishness),
@@ -199,17 +242,14 @@ export const fetchMarketSentimentScore = async () => {
       topSignal,
       sentimentScore: clamp(sentimentScore),
       signal,
+      confidenceScore,
+      confidenceLabel,
+      categoryBreakdown,
+      sampleEvents,
+      lastUpdated: new Date().toISOString(),
     };
   } catch (err) {
     console.error("Bayse sentiment fetch error:", err);
-    return {
-      politicalTension: 0.45,
-      cryptoBullishness: 0.55,
-      marketActivity: 0.5,
-      totalMarketsAnalyzed: 0,
-      topSignal: "Error fetching Bayse data",
-      sentimentScore: 0.5,
-      signal: "neutral",
-    };
+    return buildFallbackSentiment("Error fetching Bayse data");
   }
 };
