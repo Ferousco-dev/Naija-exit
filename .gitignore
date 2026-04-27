@@ -8,6 +8,10 @@ coverage/
 
 # Production
 dist/
+node_modules
+dist
+build
+.env
 
 # Misc
 .DS_Store
