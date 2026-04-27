@@ -89,7 +89,7 @@ export default function BayseIntelligenceStudio({
 }) {
   const bayse = signals?.bayse;
   const [simulatedSentiment, setSimulatedSentiment] = useState(
-    Math.round((signals?.bayse?.sentimentScore || 0.5) * 100)
+    Math.round((signals?.bayse?.sentimentScore || 0.5) * 100),
   );
   const [history, setHistory] = useState([]);
 
@@ -128,7 +128,7 @@ export default function BayseIntelligenceStudio({
 
   const baysePoints = Math.round((bayse.sentimentScore || 0.5) * 300) / 10;
   const confidencePercent = Math.round(
-    (bayse.confidenceScore ?? bayse.marketActivity ?? 0.5) * 100
+    (bayse.confidenceScore ?? bayse.marketActivity ?? 0.5) * 100,
   );
   const tone = getSignalTone(bayse.signal);
   const confidenceTone = getConfidenceTone(bayse.confidenceLabel);
@@ -305,7 +305,9 @@ export default function BayseIntelligenceStudio({
           max="90"
           step="1"
           value={simulatedSentiment}
-          onChange={(event) => setSimulatedSentiment(Number(event.target.value))}
+          onChange={(event) =>
+            setSimulatedSentiment(Number(event.target.value))
+          }
           style={{ width: "100%", accentColor: "#3B6D11", cursor: "pointer" }}
         />
         <div
@@ -345,25 +347,26 @@ export default function BayseIntelligenceStudio({
           gap: "8px",
         }}
       >
-        {Array.isArray(bayse.categoryBreakdown) && bayse.categoryBreakdown.length > 0 && (
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
-            {bayse.categoryBreakdown.map((item) => (
-              <div
-                key={item.category}
-                style={{
-                  padding: "6px 10px",
-                  borderRadius: "999px",
-                  background: "var(--color-background-primary)",
-                  border: "0.5px solid var(--color-border-tertiary)",
-                  fontSize: "11px",
-                  color: "var(--color-text-secondary)",
-                }}
-              >
-                {item.category}: {Math.round((item.marketShare || 0) * 100)}%
-              </div>
-            ))}
-          </div>
-        )}
+        {Array.isArray(bayse.categoryBreakdown) &&
+          bayse.categoryBreakdown.length > 0 && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+              {bayse.categoryBreakdown.map((item) => (
+                <div
+                  key={item.category}
+                  style={{
+                    padding: "6px 10px",
+                    borderRadius: "999px",
+                    background: "var(--color-background-primary)",
+                    border: "0.5px solid var(--color-border-tertiary)",
+                    fontSize: "11px",
+                    color: "var(--color-text-secondary)",
+                  }}
+                >
+                  {item.category}: {Math.round((item.marketShare || 0) * 100)}%
+                </div>
+              ))}
+            </div>
+          )}
         {Array.isArray(bayse.sampleEvents) && bayse.sampleEvents.length > 0 && (
           <div
             style={{

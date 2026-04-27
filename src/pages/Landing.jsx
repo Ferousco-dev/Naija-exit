@@ -712,10 +712,8 @@ export default function Landing() {
       {/* ── GLOBAL BACKGROUND ──────────────────────────────────────── */}
       <ParticleSquareCanvas
         particleCount={576}
-        style={{
-          opacity: 0.22 + (1 - heroScroll) * 0.12,
-          transform: `translateY(${scrollY * -0.08}px) scale(${1 + heroScroll * 0.04})`,
-        }}
+        scrollY={scrollY}
+        scrollDepth={2800}
       />
       <div
         style={{
