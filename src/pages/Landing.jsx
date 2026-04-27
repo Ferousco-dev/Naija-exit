@@ -713,7 +713,7 @@ export default function Landing() {
       <ParticleSquareCanvas
         particleCount={576}
         scrollY={scrollY}
-        scrollDepth={2800}
+        scrollDepth={4800}
       />
       <div
         style={{
