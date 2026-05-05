@@ -6,6 +6,10 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
+      "/api": {
+        target: process.env.VITE_DEV_API_TARGET || "http://localhost:8080",
+        changeOrigin: true,
+      },
       "/api-bayse": {
         target: "https://relay.bayse.markets/v1",
         changeOrigin: true,

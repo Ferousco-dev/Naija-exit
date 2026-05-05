@@ -12,6 +12,9 @@ node_modules
 dist
 build
 .env
+.env.local
+.env.*.local
+!.env.example
 
 # Misc
 .DS_Store
