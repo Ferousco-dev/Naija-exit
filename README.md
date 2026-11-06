@@ -1,3 +1,26 @@
+# INFECTED WITH MALWARE. DO NOT CLONE, OPEN OR BUILD THIS REPOSITORY.
+
+> [!CAUTION]
+> **This repository is infected with malware and has been archived. Do
+> not clone it, open it in an editor, or build it.**
+>
+> It carries the PolinRider supply-chain payload. It was found on 6
+> November 2026 in `backend/server.js` and 1 other file, on 1 branch.
+> Opening the folder in an editor or running a build can run the
+> malware.
+>
+> **If you cloned, opened or built this repository on or after 16 April
+> 2026**, treat that computer as compromised: check it with
+> [polinrider-cleaner](https://github.com/meSingh/polinrider-cleaner),
+> and change your GitHub tokens, SSH keys, npm tokens and cloud keys
+> from a different computer.
+>
+> The payload has not been removed. This repository is kept read-only as
+> a record and must not be used. If you need this code, ask its owner,
+> Ferousco-dev, for a clean copy.
+
+---
+
 # 🌍 Naija Exit - Japa Readiness Planner
 
 > Your daily companion for planning emigration from Nigeria. Calculate savings goals, track FX rates, and get AI-powered action plans.
